@@ -73,10 +73,11 @@ type CCIPChainState struct {
 	state.MCMSWithTimelockState
 	state.LinkTokenState
 	state.StaticLinkTokenState
-	ABIByAddress       map[string]string
-	OnRamp             onramp.OnRampInterface
-	OffRamp            offramp.OffRampInterface
-	FeeQuoter          *fee_quoter.FeeQuoter
+	ABIByAddress map[string]string
+	OnRamp       onramp.OnRampInterface
+	OffRamp      offramp.OffRampInterface
+	// FeeQuoter          *fee_quoter.FeeQuoter
+	FeeQuoter          fee_quoter.FeeQuoterInterface
 	RMNProxy           *rmn_proxy_contract.RMNProxy
 	NonceManager       *nonce_manager.NonceManager
 	TokenAdminRegistry *token_admin_registry.TokenAdminRegistry
@@ -817,6 +818,7 @@ func (c CCIPChainState) GenerateView(lggr logger.Logger, chain string) (view.Cha
 			for _, tokenDetail := range tokenDetails {
 				tokens = append(tokens, tokenDetail.Address())
 			}
+			// TODO(TON): version agnostic state view needed
 			fqView, err := v1_6.GenerateFeeQuoterView(c.FeeQuoter, c.Router, c.TestRouter, tokens)
 			if err != nil {
 				return errors.Wrapf(err, "failed to generate fee quoter view for fee quoter %s", c.FeeQuoter.Address().String())

@@ -109,6 +109,7 @@ func ConfirmGasPriceUpdatedForAll(
 				return ConfirmGasPriceUpdated(
 					t,
 					dstChain,
+					// TODO(TON): version agnostic state needed
 					state.MustGetEVMChainState(srcChain.Selector).FeeQuoter,
 					*startBlock,
 					gasPrice,
@@ -163,6 +164,7 @@ func ConfirmTokenPriceUpdatedForAll(
 			return ConfirmTokenPriceUpdated(
 				t,
 				chain,
+				// TODO(TON): version agnostic state needed
 				state.MustGetEVMChainState(chain.Selector).FeeQuoter,
 				*startBlock,
 				tokenToPrice,

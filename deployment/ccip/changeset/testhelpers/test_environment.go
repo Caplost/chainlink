@@ -34,9 +34,12 @@ import (
 	cldf "github.com/smartcontractkit/chainlink-deployments-framework/deployment"
 
 	"github.com/smartcontractkit/chainlink/deployment/ccip/changeset"
-	"github.com/smartcontractkit/chainlink/deployment/ccip/changeset/v1_6"
+	// TODO(TON): configurable version by contract per chain
+	v1_6 "github.com/smartcontractkit/chainlink/deployment/ccip/changeset/v1_6"
+	v1_6_1 "github.com/smartcontractkit/chainlink/deployment/ccip/changeset/v1_6_1"
+
 	ccipops "github.com/smartcontractkit/chainlink/deployment/ccip/operation/evm/v1_6"
-	ccipseq "github.com/smartcontractkit/chainlink/deployment/ccip/sequence/evm/v1_6"
+	ccipseq "github.com/smartcontractkit/chainlink/deployment/ccip/sequence/evm/v1_6_1"
 	"github.com/smartcontractkit/chainlink/deployment/ccip/shared"
 	"github.com/smartcontractkit/chainlink/deployment/ccip/shared/stateview"
 
@@ -652,6 +655,7 @@ func NewEnvironmentWithJobsAndContracts(t *testing.T, tEnv TestEnvironment) Depl
 	}
 
 	tEnv.UpdateDeployedEnvironment(e)
+	// TODO(TON): CCIP contract deployment point
 	e = AddCCIPContractsToEnvironment(t, allChains, tEnv, false)
 	// now we update RMNProxy to point to RMNRemote
 	e.Env, err = commonchangeset.Apply(t, e.Env,
@@ -802,8 +806,10 @@ func AddCCIPContractsToEnvironment(t *testing.T, allChains []uint64, tEnv TestEn
 				},
 			},
 		),
+		// TODO(TON): configurable version by contract per chain
 		commonchangeset.Configure(
-			cldf.CreateLegacyChangeSet(v1_6.DeployChainContractsChangeset),
+			// cldf.CreateLegacyChangeSet(v1_6.DeployChainContractsChangeset),
+			cldf.CreateLegacyChangeSet(v1_6_1.DeployChainContractsChangeset),
 			ccipseq.DeployChainContractsConfig{
 				HomeChainSelector:      e.HomeChainSel,
 				ContractParamsPerChain: evmContractParams,
