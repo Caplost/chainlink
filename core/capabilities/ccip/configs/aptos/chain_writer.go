@@ -3,29 +3,27 @@ package aptosconfig
 import (
 	"fmt"
 
-	"github.com/smartcontractkit/chainlink-ccip/pkg/consts"
-
-	"github.com/smartcontractkit/chainlink-aptos/relayer/chainreader/config"
-	"github.com/smartcontractkit/chainlink-aptos/relayer/chainwriter"
 	"github.com/smartcontractkit/chainlink-aptos/relayer/utils"
+	"github.com/smartcontractkit/chainlink-ccip/pkg/consts"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/aptos"
 )
 
-func GetChainWriterConfig(publicKeyStr string) (chainwriter.ChainWriterConfig, error) {
+func GetChainWriterConfig(publicKeyStr string) (aptos.ChainWriterConfig, error) {
 	fromAddress, err := utils.HexPublicKeyToAddress(publicKeyStr)
 	if err != nil {
-		return chainwriter.ChainWriterConfig{}, fmt.Errorf("failed to parse Aptos address from public key %s: %w", publicKeyStr, err)
+		return aptos.ChainWriterConfig{}, fmt.Errorf("failed to parse Aptos address from public key %s: %w", publicKeyStr, err)
 	}
 
-	return chainwriter.ChainWriterConfig{
-		Modules: map[string]*chainwriter.ChainWriterModule{
+	return aptos.ChainWriterConfig{
+		Modules: map[string]*aptos.ChainWriterModule{
 			consts.ContractNameOffRamp: {
 				Name: "offramp",
-				Functions: map[string]*chainwriter.ChainWriterFunction{
+				Functions: map[string]*aptos.ChainWriterFunction{
 					consts.MethodCommit: {
 						Name:        "commit",
 						PublicKey:   publicKeyStr,
 						FromAddress: fromAddress.String(),
-						Params: []config.AptosFunctionParam{
+						Params: []aptos.FunctionParam{
 							{
 								Name:     "ReportContext",
 								Type:     "vector<vector<u8>>",
@@ -47,7 +45,7 @@ func GetChainWriterConfig(publicKeyStr string) (chainwriter.ChainWriterConfig, e
 						Name:        "execute",
 						PublicKey:   publicKeyStr,
 						FromAddress: fromAddress.String(),
-						Params: []config.AptosFunctionParam{
+						Params: []aptos.FunctionParam{
 							{
 								Name:     "ReportContext",
 								Type:     "vector<vector<u8>>",
@@ -63,6 +61,6 @@ func GetChainWriterConfig(publicKeyStr string) (chainwriter.ChainWriterConfig, e
 				},
 			},
 		},
-		FeeStrategy: chainwriter.DefaultFeeStrategy,
+		FeeStrategy: aptos.DefaultFeeStrategy,
 	}, nil
 }
