@@ -8,11 +8,10 @@ import (
 	"github.com/gagliardetto/solana-go"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/codec"
+	types "github.com/smartcontractkit/chainlink-common/pkg/types/solana"
 
 	idl "github.com/smartcontractkit/chainlink-ccip/chains/solana"
 	ccipconsts "github.com/smartcontractkit/chainlink-ccip/pkg/consts"
-	"github.com/smartcontractkit/chainlink-solana/pkg/solana/chainwriter"
-	solanacodec "github.com/smartcontractkit/chainlink-solana/pkg/solana/codec"
 )
 
 var ccipOfframpIDL = idl.FetchCCIPOfframpIDL()
@@ -27,12 +26,12 @@ const (
 	merkleRoot                    = "Info.MerkleRoots.MerkleRoot"
 )
 
-func getCommitMethodConfig(fromAddress string, offrampProgramAddress string, priceOnly bool) chainwriter.MethodConfig {
+func getCommitMethodConfig(fromAddress string, offrampProgramAddress string, priceOnly bool) types.MethodConfig {
 	chainSpecificName := "commit"
 	if priceOnly {
 		chainSpecificName = "commitPriceOnly"
 	}
-	return chainwriter.MethodConfig{
+	return types.MethodConfig{
 		FromAddress: fromAddress,
 		InputModifications: []codec.ModifierConfig{
 			&codec.RenameModifierConfig{
@@ -44,8 +43,8 @@ func getCommitMethodConfig(fromAddress string, offrampProgramAddress string, pri
 		},
 		ChainSpecificName: chainSpecificName,
 		ArgsTransform:     "CCIPCommit",
-		LookupTables: chainwriter.LookupTables{
-			DerivedLookupTables: []chainwriter.DerivedLookupTable{
+		LookupTables: types.LookupTables{
+			DerivedLookupTables: []types.DerivedLookupTable{
 				getCommonAddressLookupTableConfig(offrampProgramAddress),
 			},
 		},
@@ -54,34 +53,34 @@ func getCommitMethodConfig(fromAddress string, offrampProgramAddress string, pri
 	}
 }
 
-func buildCommitAccountsList(fromAddress, offrampProgramAddress string, priceOnly bool) []chainwriter.Lookup {
-	accounts := []chainwriter.Lookup{}
+func buildCommitAccountsList(fromAddress, offrampProgramAddress string, priceOnly bool) []types.Lookup {
+	accounts := []types.Lookup{}
 	accounts = append(accounts,
 		getOfframpAccountConfig(offrampProgramAddress),
 		getReferenceAddressesConfig(offrampProgramAddress),
 	)
 	if !priceOnly {
 		accounts = append(accounts,
-			chainwriter.Lookup{
-				PDALookups: &chainwriter.PDALookups{
+			types.Lookup{
+				PDALookups: &types.PDALookups{
 					Name:      "SourceChainState",
 					PublicKey: getAddressConstant(offrampProgramAddress),
-					Seeds: []chainwriter.Seed{
+					Seeds: []types.Seed{
 						{Static: []byte("source_chain_state")},
-						{Dynamic: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: merkleRootSourceChainSelector}}},
+						{Dynamic: types.Lookup{AccountLookup: &types.AccountLookup{Location: merkleRootSourceChainSelector}}},
 					},
 					IsSigner:   false,
 					IsWritable: true,
 				},
 			},
-			chainwriter.Lookup{
-				PDALookups: &chainwriter.PDALookups{
+			types.Lookup{
+				PDALookups: &types.PDALookups{
 					Name:      "CommitReport",
 					PublicKey: getAddressConstant(offrampProgramAddress),
-					Seeds: []chainwriter.Seed{
+					Seeds: []types.Seed{
 						{Static: []byte("commit_report")},
-						{Dynamic: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: merkleRootSourceChainSelector}}},
-						{Dynamic: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: merkleRoot}}},
+						{Dynamic: types.Lookup{AccountLookup: &types.AccountLookup{Location: merkleRootSourceChainSelector}}},
+						{Dynamic: types.Lookup{AccountLookup: &types.AccountLookup{Location: merkleRoot}}},
 					},
 					IsSigner:   false,
 					IsWritable: true,
@@ -107,8 +106,8 @@ func buildCommitAccountsList(fromAddress, offrampProgramAddress string, priceOnl
 	return accounts
 }
 
-func getExecuteMethodConfig(fromAddress string, offrampProgramAddress string) chainwriter.MethodConfig {
-	return chainwriter.MethodConfig{
+func getExecuteMethodConfig(fromAddress string, offrampProgramAddress string) types.MethodConfig {
+	return types.MethodConfig{
 		FromAddress: fromAddress,
 		InputModifications: []codec.ModifierConfig{
 			&codec.RenameModifierConfig{
@@ -122,21 +121,21 @@ func getExecuteMethodConfig(fromAddress string, offrampProgramAddress string) ch
 		ArgsTransform:            "CCIPExecute",
 		ComputeUnitLimitOverhead: 150_000,
 		BufferPayloadMethod:      "CCIPExecutionReportBuffer",
-		LookupTables: chainwriter.LookupTables{
-			DerivedLookupTables: []chainwriter.DerivedLookupTable{
+		LookupTables: types.LookupTables{
+			DerivedLookupTables: []types.DerivedLookupTable{
 				{
 					Name: "PoolLookupTable",
-					Accounts: chainwriter.Lookup{
-						PDALookups: &chainwriter.PDALookups{
+					Accounts: types.Lookup{
+						PDALookups: &types.PDALookups{
 							Name:      "TokenAdminRegistry",
 							PublicKey: getRouterProgramAccount(offrampProgramAddress),
-							Seeds: []chainwriter.Seed{
+							Seeds: []types.Seed{
 								{Static: []byte("token_admin_registry")},
-								{Dynamic: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: destTokenAddress}}},
+								{Dynamic: types.Lookup{AccountLookup: &types.AccountLookup{Location: destTokenAddress}}},
 							},
 							IsSigner:   false,
 							IsWritable: false,
-							InternalField: chainwriter.InternalField{
+							InternalField: types.InternalField{
 								TypeName: "TokenAdminRegistry",
 								Location: "LookupTable",
 								// TokenAdminRegistry is in the common program so need to provide the IDL
@@ -149,44 +148,44 @@ func getExecuteMethodConfig(fromAddress string, offrampProgramAddress string) ch
 				getCommonAddressLookupTableConfig(offrampProgramAddress),
 			},
 		},
-		ATAs: []chainwriter.ATALookup{
+		ATAs: []types.ATALookup{
 			{
 				Location:      destTokenAddress,
-				WalletAddress: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: tokenReceiverAddress}},
-				TokenProgram: chainwriter.Lookup{
-					AccountsFromLookupTable: &chainwriter.AccountsFromLookupTable{
+				WalletAddress: types.Lookup{AccountLookup: &types.AccountLookup{Location: tokenReceiverAddress}},
+				TokenProgram: types.Lookup{
+					AccountsFromLookupTable: &types.AccountsFromLookupTable{
 						LookupTableName: "PoolLookupTable",
 						IncludeIndexes:  []int{6},
 					},
 				},
-				MintAddress: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: destTokenAddress}},
+				MintAddress: types.Lookup{AccountLookup: &types.AccountLookup{Location: destTokenAddress}},
 				Optional:    true, // ATA lookup is optional if DestTokenAddress is not present in report
 			},
 		},
-		Accounts: []chainwriter.Lookup{
+		Accounts: []types.Lookup{
 			getOfframpAccountConfig(offrampProgramAddress),
 			getReferenceAddressesConfig(offrampProgramAddress),
 			{
-				PDALookups: &chainwriter.PDALookups{
+				PDALookups: &types.PDALookups{
 					Name:      "SourceChainState",
 					PublicKey: getAddressConstant(offrampProgramAddress),
-					Seeds: []chainwriter.Seed{
+					Seeds: []types.Seed{
 						{Static: []byte("source_chain_state")},
-						{Dynamic: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: sourceChainSelectorPath}}},
+						{Dynamic: types.Lookup{AccountLookup: &types.AccountLookup{Location: sourceChainSelectorPath}}},
 					},
 					IsSigner:   false,
 					IsWritable: false,
 				},
 			},
 			{
-				PDALookups: &chainwriter.PDALookups{
+				PDALookups: &types.PDALookups{
 					Name:      "CommitReport",
 					PublicKey: getAddressConstant(offrampProgramAddress),
-					Seeds: []chainwriter.Seed{
+					Seeds: []types.Seed{
 						{Static: []byte("commit_report")},
-						{Dynamic: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: sourceChainSelectorPath}}},
-						{Dynamic: chainwriter.Lookup{
-							AccountLookup: &chainwriter.AccountLookup{
+						{Dynamic: types.Lookup{AccountLookup: &types.AccountLookup{Location: sourceChainSelectorPath}}},
+						{Dynamic: types.Lookup{
+							AccountLookup: &types.AccountLookup{
 								// The seed is the merkle root of the report, as passed into the input params.
 								Location: merkleRoot,
 							}},
@@ -198,12 +197,12 @@ func getExecuteMethodConfig(fromAddress string, offrampProgramAddress string) ch
 			},
 			getAddressConstant(offrampProgramAddress),
 			{
-				PDALookups: &chainwriter.PDALookups{
+				PDALookups: &types.PDALookups{
 					Name:      "AllowedOfframp",
 					PublicKey: getRouterProgramAccount(offrampProgramAddress),
-					Seeds: []chainwriter.Seed{
+					Seeds: []types.Seed{
 						{Static: []byte("allowed_offramp")},
-						{Dynamic: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: sourceChainSelectorPath}}},
+						{Dynamic: types.Lookup{AccountLookup: &types.AccountLookup{Location: sourceChainSelectorPath}}},
 						{Dynamic: getAddressConstant(offrampProgramAddress)},
 					},
 					IsSigner:   false,
@@ -224,31 +223,31 @@ func getExecuteMethodConfig(fromAddress string, offrampProgramAddress string) ch
 	}
 }
 
-func GetSolanaChainWriterConfig(offrampProgramAddress string, fromAddress string) (chainwriter.ChainWriterConfig, error) {
+func GetSolanaChainWriterConfig(offrampProgramAddress string, fromAddress string) (types.ChainWriterConfig, error) {
 	// check fromAddress
 	pk, err := solana.PublicKeyFromBase58(fromAddress)
 	if err != nil {
-		return chainwriter.ChainWriterConfig{}, fmt.Errorf("invalid from address %s: %w", fromAddress, err)
+		return types.ChainWriterConfig{}, fmt.Errorf("invalid from address %s: %w", fromAddress, err)
 	}
 
 	if pk.IsZero() {
-		return chainwriter.ChainWriterConfig{}, errors.New("from address cannot be empty")
+		return types.ChainWriterConfig{}, errors.New("from address cannot be empty")
 	}
 
 	// validate CCIP Offramp IDL, errors not expected
-	var offrampIDL solanacodec.IDL
+	var offrampIDL types.IDL
 	if err = json.Unmarshal([]byte(ccipOfframpIDL), &offrampIDL); err != nil {
-		return chainwriter.ChainWriterConfig{}, fmt.Errorf("unexpected error: invalid CCIP Offramp IDL, error: %w", err)
+		return types.ChainWriterConfig{}, fmt.Errorf("unexpected error: invalid CCIP Offramp IDL, error: %w", err)
 	}
 	// validate CCIP Router IDL, errors not expected
-	var routerIDL solanacodec.IDL
+	var routerIDL types.IDL
 	if err = json.Unmarshal([]byte(ccipRouterIDL), &routerIDL); err != nil {
-		return chainwriter.ChainWriterConfig{}, fmt.Errorf("unexpected error: invalid CCIP Router IDL, error: %w", err)
+		return types.ChainWriterConfig{}, fmt.Errorf("unexpected error: invalid CCIP Router IDL, error: %w", err)
 	}
-	solConfig := chainwriter.ChainWriterConfig{
-		Programs: map[string]chainwriter.ProgramConfig{
+	solConfig := types.ChainWriterConfig{
+		Programs: map[string]types.ProgramConfig{
 			ccipconsts.ContractNameOffRamp: {
-				Methods: map[string]chainwriter.MethodConfig{
+				Methods: map[string]types.MethodConfig{
 					ccipconsts.MethodExecute:         getExecuteMethodConfig(fromAddress, offrampProgramAddress),
 					ccipconsts.MethodCommit:          getCommitMethodConfig(fromAddress, offrampProgramAddress, false),
 					ccipconsts.MethodCommitPriceOnly: getCommitMethodConfig(fromAddress, offrampProgramAddress, true),
@@ -261,16 +260,16 @@ func GetSolanaChainWriterConfig(offrampProgramAddress string, fromAddress string
 	return solConfig, nil
 }
 
-func getOfframpAccountConfig(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getOfframpAccountConfig(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name: "OfframpAccountConfig",
-			PublicKey: chainwriter.Lookup{
-				AccountConstant: &chainwriter.AccountConstant{
+			PublicKey: types.Lookup{
+				AccountConstant: &types.AccountConstant{
 					Address: offrampProgramAddress,
 				},
 			},
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("config")},
 			},
 			IsSigner:   false,
@@ -279,9 +278,9 @@ func getOfframpAccountConfig(offrampProgramAddress string) chainwriter.Lookup {
 	}
 }
 
-func getAddressConstant(address string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		AccountConstant: &chainwriter.AccountConstant{
+func getAddressConstant(address string) types.Lookup {
+	return types.Lookup{
+		AccountConstant: &types.AccountConstant{
 			Address:    address,
 			IsSigner:   false,
 			IsWritable: false,
@@ -289,18 +288,18 @@ func getAddressConstant(address string) chainwriter.Lookup {
 	}
 }
 
-func getFeeQuoterProgramAccount(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getFeeQuoterProgramAccount(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name:      ccipconsts.ContractNameFeeQuoter,
 			PublicKey: getAddressConstant(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("reference_addresses")},
 			},
 			IsSigner:   false,
 			IsWritable: false,
 			// Reads the address from the reference addresses account
-			InternalField: chainwriter.InternalField{
+			InternalField: types.InternalField{
 				TypeName: "ReferenceAddresses",
 				Location: "FeeQuoter",
 				IDL:      ccipOfframpIDL,
@@ -309,18 +308,18 @@ func getFeeQuoterProgramAccount(offrampProgramAddress string) chainwriter.Lookup
 	}
 }
 
-func getRouterProgramAccount(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getRouterProgramAccount(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name:      ccipconsts.ContractNameRouter,
 			PublicKey: getAddressConstant(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("reference_addresses")},
 			},
 			IsSigner:   false,
 			IsWritable: false,
 			// Reads the address from the reference addresses account
-			InternalField: chainwriter.InternalField{
+			InternalField: types.InternalField{
 				TypeName: "ReferenceAddresses",
 				Location: "Router",
 				IDL:      ccipOfframpIDL,
@@ -329,12 +328,12 @@ func getRouterProgramAccount(offrampProgramAddress string) chainwriter.Lookup {
 	}
 }
 
-func getReferenceAddressesConfig(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getReferenceAddressesConfig(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name:      "ReferenceAddresses",
 			PublicKey: getAddressConstant(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("reference_addresses")},
 			},
 			IsSigner:   false,
@@ -343,12 +342,12 @@ func getReferenceAddressesConfig(offrampProgramAddress string) chainwriter.Looku
 	}
 }
 
-func getFeeBillingSignerConfig(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getFeeBillingSignerConfig(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name:      "FeeBillingSigner",
 			PublicKey: getAddressConstant(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("fee_billing_signer")},
 			},
 			IsSigner:   false,
@@ -357,13 +356,13 @@ func getFeeBillingSignerConfig(offrampProgramAddress string) chainwriter.Lookup 
 	}
 }
 
-func getFeeQuoterAllowedPriceUpdater(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getFeeQuoterAllowedPriceUpdater(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name: "FeeQuoterAllowedPriceUpdater",
 			// Fetch fee quoter public key to use as program ID for PDA
 			PublicKey: getFeeQuoterProgramAccount(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("allowed_price_updater")},
 				{Dynamic: getFeeBillingSignerConfig(offrampProgramAddress)},
 			},
@@ -373,13 +372,13 @@ func getFeeQuoterAllowedPriceUpdater(offrampProgramAddress string) chainwriter.L
 	}
 }
 
-func getFeeQuoterConfigLookup(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getFeeQuoterConfigLookup(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name: "FeeQuoterConfig",
 			// Fetch fee quoter public key to use as program ID for PDA
 			PublicKey: getFeeQuoterProgramAccount(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("config")},
 			},
 			IsSigner:   false,
@@ -388,18 +387,18 @@ func getFeeQuoterConfigLookup(offrampProgramAddress string) chainwriter.Lookup {
 	}
 }
 
-func getRMNRemoteProgramAccount(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getRMNRemoteProgramAccount(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name:      ccipconsts.ContractNameRMNRemote,
 			PublicKey: getAddressConstant(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("reference_addresses")},
 			},
 			IsSigner:   false,
 			IsWritable: false,
 			// Reads the address from the reference addresses account
-			InternalField: chainwriter.InternalField{
+			InternalField: types.InternalField{
 				TypeName: "ReferenceAddresses",
 				Location: "RmnRemote",
 				IDL:      ccipOfframpIDL,
@@ -408,12 +407,12 @@ func getRMNRemoteProgramAccount(offrampProgramAddress string) chainwriter.Lookup
 	}
 }
 
-func getRMNRemoteCursesLookup(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getRMNRemoteCursesLookup(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name:      "RMNRemoteCurses",
 			PublicKey: getRMNRemoteProgramAccount(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("curses")},
 			},
 			IsSigner:   false,
@@ -422,12 +421,12 @@ func getRMNRemoteCursesLookup(offrampProgramAddress string) chainwriter.Lookup {
 	}
 }
 
-func getRMNRemoteConfigLookup(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getRMNRemoteConfigLookup(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name:      "RMNRemoteConfig",
 			PublicKey: getRMNRemoteProgramAccount(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("config")},
 			},
 			IsSigner:   false,
@@ -436,12 +435,12 @@ func getRMNRemoteConfigLookup(offrampProgramAddress string) chainwriter.Lookup {
 	}
 }
 
-func getGlobalStateConfig(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getGlobalStateConfig(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name:      "GlobalState",
 			PublicKey: getAddressConstant(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("state")},
 			},
 			IsSigner:   false,
@@ -451,14 +450,14 @@ func getGlobalStateConfig(offrampProgramAddress string) chainwriter.Lookup {
 	}
 }
 
-func getBillingTokenConfig(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getBillingTokenConfig(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name:      "BillingTokenConfig",
 			PublicKey: getFeeQuoterProgramAccount(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("fee_billing_token_config")},
-				{Dynamic: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: "Info.TokenPriceUpdates.TokenID"}}},
+				{Dynamic: types.Lookup{AccountLookup: &types.AccountLookup{Location: "Info.TokenPriceUpdates.TokenID"}}},
 			},
 			IsSigner:   false,
 			IsWritable: true,
@@ -467,14 +466,14 @@ func getBillingTokenConfig(offrampProgramAddress string) chainwriter.Lookup {
 	}
 }
 
-func getChainConfigGasPriceConfig(offrampProgramAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		PDALookups: &chainwriter.PDALookups{
+func getChainConfigGasPriceConfig(offrampProgramAddress string) types.Lookup {
+	return types.Lookup{
+		PDALookups: &types.PDALookups{
 			Name:      "ChainConfigGasPrice",
 			PublicKey: getFeeQuoterProgramAccount(offrampProgramAddress),
-			Seeds: []chainwriter.Seed{
+			Seeds: []types.Seed{
 				{Static: []byte("dest_chain")},
-				{Dynamic: chainwriter.Lookup{AccountLookup: &chainwriter.AccountLookup{Location: "Info.GasPriceUpdates.ChainSel"}}},
+				{Dynamic: types.Lookup{AccountLookup: &types.AccountLookup{Location: "Info.GasPriceUpdates.ChainSel"}}},
 			},
 			IsSigner:   false,
 			IsWritable: true,
@@ -485,17 +484,17 @@ func getChainConfigGasPriceConfig(offrampProgramAddress string) chainwriter.Look
 
 // getCommonAddressLookupTableConfig returns the lookup table config that fetches the lookup table address from a PDA on-chain
 // The offramp contract contains a PDA with a ReferenceAddresses struct that stores the lookup table address in the OfframpLookupTable field
-func getCommonAddressLookupTableConfig(offrampProgramAddress string) chainwriter.DerivedLookupTable {
-	return chainwriter.DerivedLookupTable{
+func getCommonAddressLookupTableConfig(offrampProgramAddress string) types.DerivedLookupTable {
+	return types.DerivedLookupTable{
 		Name: "CommonAddressLookupTable",
-		Accounts: chainwriter.Lookup{
-			PDALookups: &chainwriter.PDALookups{
+		Accounts: types.Lookup{
+			PDALookups: &types.PDALookups{
 				Name:      "OfframpLookupTable",
 				PublicKey: getAddressConstant(offrampProgramAddress),
-				Seeds: []chainwriter.Seed{
+				Seeds: []types.Seed{
 					{Static: []byte("reference_addresses")},
 				},
-				InternalField: chainwriter.InternalField{
+				InternalField: types.InternalField{
 					TypeName: "ReferenceAddresses",
 					Location: "OfframpLookupTable",
 					IDL:      ccipOfframpIDL,
@@ -505,9 +504,9 @@ func getCommonAddressLookupTableConfig(offrampProgramAddress string) chainwriter
 	}
 }
 
-func getAuthorityAccountConstant(fromAddress string) chainwriter.Lookup {
-	return chainwriter.Lookup{
-		AccountConstant: &chainwriter.AccountConstant{
+func getAuthorityAccountConstant(fromAddress string) types.Lookup {
+	return types.Lookup{
+		AccountConstant: &types.AccountConstant{
 			Name:       "Authority",
 			Address:    fromAddress,
 			IsSigner:   true,
@@ -516,9 +515,9 @@ func getAuthorityAccountConstant(fromAddress string) chainwriter.Lookup {
 	}
 }
 
-func getSystemProgramConstant() chainwriter.Lookup {
-	return chainwriter.Lookup{
-		AccountConstant: &chainwriter.AccountConstant{
+func getSystemProgramConstant() types.Lookup {
+	return types.Lookup{
+		AccountConstant: &types.AccountConstant{
 			Name:       "SystemProgram",
 			Address:    solana.SystemProgramID.String(),
 			IsSigner:   false,
@@ -527,9 +526,9 @@ func getSystemProgramConstant() chainwriter.Lookup {
 	}
 }
 
-func getSysVarInstructionConstant() chainwriter.Lookup {
-	return chainwriter.Lookup{
-		AccountConstant: &chainwriter.AccountConstant{
+func getSysVarInstructionConstant() types.Lookup {
+	return types.Lookup{
+		AccountConstant: &types.AccountConstant{
 			Name:       "SysvarInstructions",
 			Address:    solana.SysVarInstructionsPubkey.String(),
 			IsSigner:   false,
