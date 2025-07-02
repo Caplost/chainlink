@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/guregu/null.v4"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
@@ -111,10 +112,12 @@ type Service interface {
 	IsJobManaged(ctx context.Context, jobID int64) (bool, error)
 	ProposeJob(ctx context.Context, args *ProposeJobArgs) (int64, error)
 	RevokeJob(ctx context.Context, args *RevokeJobArgs) (int64, error)
+	TransferJob(ctx context.Context, args *TransferJobArgs) error
 	SyncNodeInfo(ctx context.Context, id int64) error
 
 	CountJobProposalsByStatus(ctx context.Context) (*JobProposalCounts, error)
 	GetJobProposal(ctx context.Context, id int64) (*JobProposal, error)
+	GetJobProposalByRemoteUUID(ctx context.Context, remoteUUID uuid.UUID) (*JobProposal, error)
 	ListJobProposalsByManagersIDs(ctx context.Context, ids []int64) ([]JobProposal, error)
 
 	ApproveSpec(ctx context.Context, id int64, force bool) error
@@ -607,6 +610,13 @@ type RevokeJobArgs struct {
 	RemoteUUID     uuid.UUID
 }
 
+// TransferJobArgs are the arguments to provide the TransferJob method
+type TransferJobArgs struct {
+	RemoteUUID          uuid.UUID
+	SourceManagerPubKey string
+	TargetManagerPubKey string
+}
+
 // RevokeJob revokes a pending job proposal if it exist. The feeds manager
 // id check ensures that only the intended feed manager can make this request.
 func (s *service) RevokeJob(ctx context.Context, args *RevokeJobArgs) (int64, error) {
@@ -651,6 +661,99 @@ func (s *service) RevokeJob(ctx context.Context, args *RevokeJobArgs) (int64, er
 	}
 
 	return proposal.ID, nil
+}
+
+// TransferJob transfers a job proposal from one feeds manager to another.
+func (s *service) TransferJob(ctx context.Context, args *TransferJobArgs) error {
+	s.lggr.Infow("Beginning to Transfer",
+		"remoteUUID", args.RemoteUUID,
+		"SourceManagerPubKey", args.SourceManagerPubKey,
+		"TargetManagerPubKey", args.TargetManagerPubKey,
+	)
+
+	sourceManagerPubKeyBytes, err := hex.DecodeString(args.SourceManagerPubKey)
+	if err != nil {
+		return err
+	}
+
+	targetManagerPubKeyBytes, err := hex.DecodeString(args.TargetManagerPubKey)
+	if err != nil {
+		return err
+	}
+
+	sourceManager, err := s.orm.GetManagerByPublicKey(ctx, cryptoutils.PublicKey(sourceManagerPubKeyBytes))
+	if err != nil {
+		return errors.Wrap(err, "failed to get source manager by public key")
+	}
+
+	targetManager, err := s.orm.GetManagerByPublicKey(ctx, cryptoutils.PublicKey(targetManagerPubKeyBytes))
+	if err != nil {
+		return errors.Wrap(err, "failed to get target manager by public key")
+	}
+
+	proposal, err := s.orm.GetJobProposalByRemoteUUID(ctx, args.RemoteUUID)
+	if err != nil {
+		return errors.Wrap(err, "failed to get job proposal")
+	}
+
+	// Verify the source manager owns this job
+	if proposal.FeedsManagerID != sourceManager.ID {
+		return errors.New("job proposal does not belong to the specified source manager")
+	}
+
+	// Verify target manager exists and is different from source
+	if sourceManager.ID == targetManager.ID {
+		return errors.New("source and target managers cannot be the same")
+	}
+
+	targetFMSClient, err := s.connMgr.GetClient(targetManager.ID)
+	if err != nil {
+		return errors.Wrap(err, "failed to get target feeds manager client")
+	}
+
+	logger := s.lggr.With(
+		"job_proposal_id", proposal.ID,
+		"source_manager_id", sourceManager.ID,
+		"target_manager_id", targetManager.ID,
+		"source_manager_pubkey", args.SourceManagerPubKey,
+		"target_manager_pubkey", args.TargetManagerPubKey,
+		"remote_uuid", args.RemoteUUID,
+	)
+
+	var transferReq *pb.TransferedJobRequest
+	err = s.orm.Transact(ctx, func(tx ORM) error {
+		specs, txErr := tx.ListSpecsByJobProposalIDs(ctx, []int64{proposal.ID})
+		if txErr != nil {
+			return errors.Wrap(txErr, "failed to get job proposal specs")
+		}
+
+		transferReq, txErr = s.buildTransferedJobRequest(proposal, specs, targetManager)
+		if txErr != nil {
+			return errors.Wrap(txErr, "failed to build transfer request")
+		}
+
+		txErr = tx.TransferJobProposal(ctx, proposal.ID, targetManager.ID)
+		if txErr != nil {
+			logger.Errorw("Failed to transfer job proposal in database", "err", txErr)
+			return errors.Wrap(txErr, "failed to transfer job proposal ownership")
+		}
+
+		logger.Infow("Calling TransferedJob on target FMS", "target_manager", targetManager.Name)
+		_, txErr = targetFMSClient.TransferedJob(ctx, transferReq)
+		if txErr != nil {
+			logger.Errorw("Failed to call TransferedJob on target FMS", "err", txErr)
+			return errors.Wrap(txErr, "failed to call TransferedJob on target FMS")
+		}
+
+		return nil
+	})
+	if err != nil {
+		logger.Errorw("Transfer transaction failed", "err", err)
+		return err
+	}
+
+	logger.Infow("Successfully completed job transfer", "target_manager", targetManager.Name)
+	return nil
 }
 
 // ProposeJobArgs are the arguments to provide to the ProposeJob method.
@@ -780,6 +883,11 @@ func isWFSpec(lggr logger.Logger, spec string) bool {
 // GetJobProposal gets a job proposal by id.
 func (s *service) GetJobProposal(ctx context.Context, id int64) (*JobProposal, error) {
 	return s.orm.GetJobProposal(ctx, id)
+}
+
+// GetJobProposalByRemoteUUID gets a job proposal by remote UUID.
+func (s *service) GetJobProposalByRemoteUUID(ctx context.Context, remoteUUID uuid.UUID) (*JobProposal, error) {
+	return s.orm.GetJobProposalByRemoteUUID(ctx, remoteUUID)
 }
 
 // CountJobProposalsByStatus returns the count of job proposals with a given status.
@@ -1696,6 +1804,10 @@ func (ns NullService) GetJobProposal(ctx context.Context, id int64) (*JobProposa
 	return nil, ErrFeedsManagerDisabled
 }
 
+func (ns NullService) GetJobProposalByRemoteUUID(ctx context.Context, remoteUUID uuid.UUID) (*JobProposal, error) {
+	return nil, ErrFeedsManagerDisabled
+}
+
 func (ns NullService) ListSpecsByJobProposalIDs(ctx context.Context, ids []int64) ([]JobProposalSpec, error) {
 	return nil, ErrFeedsManagerDisabled
 }
@@ -1746,6 +1858,10 @@ func (ns NullService) DeleteJob(ctx context.Context, args *DeleteJobArgs) (int64
 
 func (ns NullService) RevokeJob(ctx context.Context, args *RevokeJobArgs) (int64, error) {
 	return 0, ErrFeedsManagerDisabled
+}
+
+func (ns NullService) TransferJob(ctx context.Context, args *TransferJobArgs) error {
+	return ErrFeedsManagerDisabled
 }
 
 func (ns NullService) RegisterManager(ctx context.Context, params RegisterManagerParams) (int64, error) {
@@ -1875,4 +1991,87 @@ func (s *service) deleteWorkflowJobWithTransaction(ctx context.Context, proposal
 
 	logger.Infow("Successfully auto-cancelled a workflow spec", "jobProposalID", proposal.ID, "jobProposalSpecID", jpSpec.ID, "jobSpecID", jobSpecID, "name", job.Name)
 	return nil
+}
+
+// buildTransferedJobRequest constructs the protobuf request for TransferedJob.
+func (s *service) buildTransferedJobRequest(
+	proposal *JobProposal,
+	specs []JobProposalSpec,
+	targetManager *FeedsManager,
+) (*pb.TransferedJobRequest, error) {
+	job := &pb.Job{
+		Uuid:       proposal.RemoteUUID.String(),
+		OriginalId: fmt.Sprintf("%d", proposal.ID),
+		CreatedAt:  timestamppb.New(proposal.CreatedAt),
+		UpdatedAt:  timestamppb.New(proposal.UpdatedAt),
+		Labels:     make(map[string]string),
+	}
+
+	proposals := make([]*pb.Proposal, 0, len(specs))
+	for _, spec := range specs {
+		protoStatus := s.convertSpecStatusToProtoStatus(spec.Status)
+		protoDeliveryStatus := s.convertToProtoDeliveryStatus(spec.Status)
+
+		proposal := &pb.Proposal{
+			OriginalId:     fmt.Sprintf("%d", spec.ID),
+			Revision:       int64(spec.Version),
+			Status:         protoStatus,
+			DeliveryStatus: protoDeliveryStatus,
+			OriginalJobId:  fmt.Sprintf("%d", spec.JobProposalID),
+			Spec:           spec.Definition,
+			CreatedAt:      timestamppb.New(spec.CreatedAt),
+			UpdatedAt:      timestamppb.New(spec.UpdatedAt),
+		}
+
+		proposals = append(proposals, proposal)
+	}
+
+	sourceJdId := fmt.Sprintf("%d", proposal.FeedsManagerID)
+
+	csaKeys, err := s.csaKeyStore.GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CSA keys: %w", err)
+	}
+	if len(csaKeys) == 0 {
+		return nil, fmt.Errorf("no CSA key found for node")
+	}
+	nodeCSAKey := csaKeys[0] // There is only ne CSA key per node?
+
+	transferReq := &pb.TransferedJobRequest{
+		Job:              job,
+		Proposals:        proposals,
+		TargetNodePubKey: nodeCSAKey.PublicKeyString(),
+		SourceJdCsaKey:   &sourceJdId,
+	}
+
+	return transferReq, nil
+}
+
+// Helper functions to convert status types
+func (s *service) convertSpecStatusToProtoStatus(status SpecStatus) pb.ProposalStatus {
+	switch status {
+	case SpecStatusPending:
+		return pb.ProposalStatus_PROPOSAL_STATUS_PENDING
+	case SpecStatusApproved:
+		return pb.ProposalStatus_PROPOSAL_STATUS_APPROVED
+	case SpecStatusRejected:
+		return pb.ProposalStatus_PROPOSAL_STATUS_REJECTED
+	case SpecStatusCancelled:
+		return pb.ProposalStatus_PROPOSAL_STATUS_CANCELLED
+	case SpecStatusRevoked:
+		return pb.ProposalStatus_PROPOSAL_STATUS_REVOKED
+	default:
+		return pb.ProposalStatus_PROPOSAL_STATUS_UNSPECIFIED
+	}
+}
+
+func (s *service) convertToProtoDeliveryStatus(status SpecStatus) pb.ProposalDeliveryStatus {
+	switch status {
+	case SpecStatusPending:
+		return pb.ProposalDeliveryStatus_PROPOSAL_DELIVERY_STATUS_PENDING
+	case SpecStatusApproved, SpecStatusRejected, SpecStatusCancelled, SpecStatusRevoked:
+		return pb.ProposalDeliveryStatus_PROPOSAL_DELIVERY_STATUS_ACKNOWLEDGED
+	default:
+		return pb.ProposalDeliveryStatus_PROPOSAL_DELIVERY_STATUS_UNSPECIFIED
+	}
 }
