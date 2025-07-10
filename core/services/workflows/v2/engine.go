@@ -507,8 +507,7 @@ func (e *Engine) deductStandardBalances(meteringReport *metering.Report) {
 	compMs := decimal.NewFromInt(int64(e.cfg.LocalLimits.WorkflowExecutionTimeoutMs) + ctxCancelPadding)
 
 	if err = meteringReport.Settle(computeUnit, []capabilities.MeteringNodeDetail{
-		// TODO: maybe need a p2pID
-		{Peer2PeerID: "", SpendUnit: computeUnit, SpendValue: compMs.String()},
+		{Peer2PeerID: e.localNode.PeerID.String(), SpendUnit: computeUnit, SpendValue: compMs.String()},
 	}); err != nil {
 		e.lggr.Errorw("could not meter compute", "err", err)
 	}
