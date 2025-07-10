@@ -456,13 +456,13 @@ func (d *Delegate) ServicesForSpec(ctx context.Context, jb job.Job) ([]job.Servi
 	if rid.Network == relay.NetworkEVM {
 		lggr = logger.Sugared(lggr.With("evmChainID", rid.ChainID))
 
-		r, err2 := d.RelayGetter.Get(rid)
+		r, err2 := d.Get(rid)
 		if err2 != nil {
-			return nil, fmt.Errorf("Could not get EVM Relayerset for chain %s: %w", rid.ChainID, err2)
+			return nil, fmt.Errorf("could not get EVM Relayerset for chain %s: %w", rid.ChainID, err2)
 		}
 		evm, err2 := r.EVM()
 		if err2 != nil {
-			return nil, fmt.Errorf("Could not get EVMService for chain %s: %w", rid.ChainID, err2)
+			return nil, fmt.Errorf("could not get EVMService for chain %s: %w", rid.ChainID, err2)
 		}
 		effectiveTransmitterID, err2 = GetEVMEffectiveTransmitterID(ctx, &jb, evm, lggr)
 		if err2 != nil {
