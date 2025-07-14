@@ -748,13 +748,15 @@ func setupSolEvmLanes(lggr logger.Logger, e *cldf.Environment, state stateview.C
 				if hasLaneFromTo(relevantLanes, evmChainSel, solChainSel) {
 					cs := testhelpers.AddEVMSrcChangesets(evmChainSel, solChainSel, false, gasPrices, tokenPrices, fqCfg)
 					laneChangesets = append(laneChangesets, cs...)
-					cs = testhelpers.AddLaneSolanaChangesets(&deployedEnv, solSelector.Selector, evmSelector.Selector, chainselectors.FamilyEVM)
+					cs = testhelpers.AddSolanaDstChangesets(&deployedEnv, solSelector.Selector, evmSelector.Selector, chainselectors.FamilyEVM)
 					laneChangesets = append(laneChangesets, cs...)
 				}
 
 				// SOL -> EVM (only if lane exists)
 				if hasLaneFromTo(relevantLanes, solChainSel, evmChainSel) {
 					cs := testhelpers.AddEVMDestChangesets(&deployedEnv, evmSelector.Selector, solSelector.Selector, false)
+					laneChangesets = append(laneChangesets, cs...)
+					cs = testhelpers.AddSolanaSrcChangesets(&deployedEnv, solSelector.Selector, evmSelector.Selector, chainselectors.FamilyEVM)
 					laneChangesets = append(laneChangesets, cs...)
 				}
 
