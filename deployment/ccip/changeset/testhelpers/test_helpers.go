@@ -1166,7 +1166,7 @@ func AddLane(
 		}
 		changesets = append(changesets, AddEVMSrcChangesets(from, to, isTestRouter, gasPrices, evmTokenPrices, fqCfg)...)
 	case chainsel.FamilySolana:
-		changesets = append(changesets, AddLaneSolanaChangesets(e, from, to, toFamily)...)
+		changesets = append(changesets, AddSolanaSrcChangesets(e, from, to, toFamily)...)
 	case chainsel.FamilyAptos:
 		aptosTokenPrices := make(map[aptos.AccountAddress]*big.Int, len(tokenPrices))
 		for address, price := range tokenPrices {
@@ -1179,7 +1179,7 @@ func AddLane(
 	case chainsel.FamilyEVM:
 		changesets = append(changesets, AddEVMDestChangesets(e, to, from, isTestRouter)...)
 	case chainsel.FamilySolana:
-		changesets = append(changesets, AddLaneSolanaChangesets(e, to, from, fromFamily)...)
+		changesets = append(changesets, AddSolanaDstChangesets(e, to, from, fromFamily)...)
 	case chainsel.FamilyAptos:
 		changesets = append(changesets, AddLaneAptosChangesets(t, from, to, gasPrices, nil)...)
 	case chainsel.FamilyTon:
@@ -1190,6 +1190,76 @@ func AddLane(
 		return err
 	}
 	return nil
+}
+
+func AddSolanaSrcChangesets(e *DeployedEnv, solChainSelector, remoteChainSelector uint64, remoteFamily string) []commoncs.ConfiguredChangeSet {
+	chainFamilySelector := [4]uint8{}
+	switch remoteFamily {
+	case chainsel.FamilyEVM:
+		// bytes4(keccak256("CCIP ChainFamilySelector EVM"))
+		chainFamilySelector = [4]uint8{40, 18, 213, 44}
+	case chainsel.FamilySolana:
+		// bytes4(keccak256("CCIP ChainFamilySelector SVM"));
+		chainFamilySelector = [4]uint8{30, 16, 189, 196}
+	case chainsel.FamilyAptos:
+		// bytes4(keccak256("CCIP ChainFamilySelector APTOS"));
+		chainFamilySelector = [4]uint8{0xac, 0x77, 0xff, 0xec}
+	default:
+		panic("unsupported remote family")
+	}
+	solanaChangesets := []commoncs.ConfiguredChangeSet{
+		commoncs.Configure(
+			cldf.CreateLegacyChangeSet(ccipChangeSetSolana.AddRemoteChainToRouter),
+			ccipChangeSetSolana.AddRemoteChainToRouterConfig{
+				ChainSelector: solChainSelector,
+				UpdatesByChain: map[uint64]*ccipChangeSetSolana.RouterConfig{
+					remoteChainSelector: {
+						RouterDestinationConfig: solRouter.DestChainConfig{
+							AllowListEnabled: false,
+						},
+					},
+				},
+			},
+		),
+		commoncs.Configure(
+			cldf.CreateLegacyChangeSet(ccipChangeSetSolana.AddRemoteChainToFeeQuoter),
+			ccipChangeSetSolana.AddRemoteChainToFeeQuoterConfig{
+				ChainSelector: solChainSelector,
+				UpdatesByChain: map[uint64]*ccipChangeSetSolana.FeeQuoterConfig{
+					remoteChainSelector: {
+						FeeQuoterDestinationConfig: solFeeQuoter.DestChainConfig{
+							IsEnabled:                   true,
+							DefaultTxGasLimit:           200000,
+							MaxPerMsgGasLimit:           3000000,
+							MaxDataBytes:                30000,
+							MaxNumberOfTokensPerMsg:     5,
+							DefaultTokenDestGasOverhead: 90000,
+							DestGasOverhead:             90000,
+							ChainFamilySelector:         chainFamilySelector,
+						},
+					},
+				},
+			},
+		),
+	}
+	return solanaChangesets
+}
+
+func AddSolanaDstChangesets(e *DeployedEnv, solChainSelector, remoteChainSelector uint64, remoteFamily string) []commoncs.ConfiguredChangeSet {
+	solanaChangesets := []commoncs.ConfiguredChangeSet{
+		commoncs.Configure(
+			cldf.CreateLegacyChangeSet(ccipChangeSetSolana.AddRemoteChainToOffRamp),
+			ccipChangeSetSolana.AddRemoteChainToOffRampConfig{
+				ChainSelector: solChainSelector,
+				UpdatesByChain: map[uint64]*ccipChangeSetSolana.OffRampConfig{
+					remoteChainSelector: {
+						EnabledAsSource: true,
+					},
+				},
+			},
+		),
+	}
+	return solanaChangesets
 }
 
 func AddLaneSolanaChangesets(e *DeployedEnv, solChainSelector, remoteChainSelector uint64, remoteFamily string) []commoncs.ConfiguredChangeSet {
@@ -1215,8 +1285,7 @@ func AddLaneSolanaChangesets(e *DeployedEnv, solChainSelector, remoteChainSelect
 				UpdatesByChain: map[uint64]*ccipChangeSetSolana.RouterConfig{
 					remoteChainSelector: {
 						RouterDestinationConfig: solRouter.DestChainConfig{
-							AllowListEnabled: true,
-							AllowedSenders:   []solana.PublicKey{e.Env.BlockChains.SolanaChains()[solChainSelector].DeployerKey.PublicKey()},
+							AllowListEnabled: false,
 						},
 					},
 				},
