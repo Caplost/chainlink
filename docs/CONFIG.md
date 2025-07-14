@@ -872,6 +872,20 @@ ListenIP = '0.0.0.0' # Default
 ```
 ListenIP specifies the IP to bind the HTTPS server to
 
+## JobDistributor
+```toml
+[JobDistributor]
+NopFriendlyName = "node-1" # Example
+```
+Job Distributor stores the configuration for Job Distributor
+
+### NopFriendlyName
+```toml
+NopFriendlyName = "node-1" # Example
+```
+NopFriendlyName is a friendly name set by the NOP to be shown in Job Distributor.
+Default: ""
+
 ## JobPipeline
 ```toml
 [JobPipeline]
