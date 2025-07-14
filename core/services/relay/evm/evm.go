@@ -213,6 +213,10 @@ func NewRelayer(lggr logger.Logger, chain legacyevm.Chain, opts RelayerOpts) (*R
 		lloORM := llo.NewChainScopedORM(opts.DS, chainSelector)
 		return channeldefinitions.NewChannelDefinitionCacheFactory(sugared, lloORM, chain.LogPoller(), opts.HTTPClient), nil
 	})
+	evmServiceLogger, err := logger.New()
+	if err != nil {
+		return nil, err
+	}
 	return &Relayer{
 		ds:                    opts.DS,
 		chain:                 chain,
@@ -227,7 +231,8 @@ func NewRelayer(lggr logger.Logger, chain legacyevm.Chain, opts RelayerOpts) (*R
 		mercuryCfg:            opts.MercuryConfig,
 		capabilitiesRegistry:  opts.CapabilitiesRegistry,
 		evmService: evmService{
-			chain: chain,
+			chain:  chain,
+			logger: evmServiceLogger,
 		},
 	}, nil
 }

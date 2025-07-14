@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -12,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/chains/evm"
 	evmtypes "github.com/smartcontractkit/chainlink-common/pkg/types/chains/evm"
@@ -19,6 +19,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	evmprimitives "github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives/evm"
+	"github.com/smartcontractkit/chainlink-common/pkg/utils/retry"
 	"github.com/smartcontractkit/chainlink-evm/pkg/chains/legacyevm"
 	"github.com/smartcontractkit/chainlink-evm/pkg/logpoller"
 	evmtxmgr "github.com/smartcontractkit/chainlink-evm/pkg/txmgr"
@@ -29,7 +30,8 @@ import (
 )
 
 type evmService struct {
-	chain legacyevm.Chain
+	chain  legacyevm.Chain
+	logger logger.Logger
 }
 
 // Direct RPC
@@ -176,10 +178,10 @@ func (e *evmService) SubmitTransaction(ctx context.Context, txRequest evmtypes.S
 	}
 
 	maximumWaitTimeForConfirmation := config.EVM().ConfirmationTimeout()
-	start := time.Now()
 
-	timeBetweenRetries := 100 * time.Millisecond
-	txStatus, err := withRetry(ctx, maximumWaitTimeForConfirmation, timeBetweenRetries, func() (evm.TransactionStatus, error) {
+	retryContext, cancel := context.WithTimeout(ctx, maximumWaitTimeForConfirmation)
+	defer cancel()
+	txStatus, err := retry.Do(retryContext, e.logger, func(ctx context.Context) (evm.TransactionStatus, error) {
 		txStatus, txStatusErr := e.chain.TxManager().GetTransactionStatus(ctx, txID)
 		if txStatusErr != nil {
 			return evm.TxFatal, txStatusErr
@@ -197,16 +199,14 @@ func (e *evmService) SubmitTransaction(ctx context.Context, txRequest evmtypes.S
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed getting transaction status. %w", err)
 	}
 
 	if txStatus == evm.TxFatal {
 		return &evmtypes.TransactionResult{TxStatus: txStatus}, nil
 	}
 
-	remainingTime := maximumWaitTimeForConfirmation - time.Since(start)
-
-	receipt, err := withRetry(ctx, remainingTime, timeBetweenRetries, func() (*evmtxmgr.ChainReceipt, error) {
+	receipt, err := retry.Do(retryContext, e.logger, func(ctx context.Context) (*evmtxmgr.ChainReceipt, error) {
 		receipt, receiptErr := e.chain.TxManager().GetTransactionReceipt(ctx, txID)
 		if receiptErr != nil {
 			return nil, fmt.Errorf("failed to get TX receipt for tx with ID %s: %w", txID, receiptErr)
@@ -218,7 +218,7 @@ func (e *evmService) SubmitTransaction(ctx context.Context, txRequest evmtypes.S
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed getting transaction receipt. %w", err)
 	}
 
 	return &evmtypes.TransactionResult{
@@ -434,31 +434,4 @@ func confidenceToConformations(conf primitives.ConfidenceLevel) types.Confirmati
 func bytesToHash(b []byte) (h evm.Hash) {
 	copy(h[:], b)
 	return
-}
-
-// Retry retries fn until success or timeout. If ctx times out, it returns nil and an error.
-// Use this only if T is a type that can be nil (e.g., pointer, slice, map).
-func withRetry[T any](ctx context.Context, totalTimeout, retryInterval time.Duration, fn func() (T, error)) (T, error) {
-	ctx, cancel := context.WithTimeout(ctx, totalTimeout)
-	defer cancel()
-
-	var zero T
-	var lastErr error
-
-	for {
-		result, err := fn()
-		if err == nil {
-			return result, nil
-		}
-
-		lastErr = err
-
-		select {
-		case <-ctx.Done():
-			// If T can be nil, then zero is nil.
-			return zero, fmt.Errorf("retry failed: timeout exceeded, last error: %w", lastErr)
-		case <-time.After(retryInterval):
-			// retry
-		}
-	}
 }

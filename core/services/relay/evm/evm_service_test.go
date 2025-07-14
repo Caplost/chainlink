@@ -13,6 +13,7 @@ import (
 
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 
+	logger "github.com/smartcontractkit/chainlink-common/pkg/logger"
 	commontypes "github.com/smartcontractkit/chainlink-common/pkg/types"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/chains/evm"
 	"github.com/smartcontractkit/chainlink-evm/pkg/client/clienttest"
@@ -73,9 +74,11 @@ func setupMocksAndRelayer(t *testing.T) (*Mocks, *Relayer) {
 	mockConfig.EXPECT().EVM().Return(mockEVM).Maybe()
 	mockEVM.EXPECT().Workflow().Return(mockWorkflow).Maybe()
 
+	lggr, err := logger.New()
+	require.NoError(t, err)
 	relayer := &Relayer{
 		chain:      chain,
-		evmService: evmService{chain: chain},
+		evmService: evmService{chain: chain, logger: lggr},
 	}
 
 	return &Mocks{
@@ -104,7 +107,7 @@ func runSubmitTransactionTest(t *testing.T, tc SubmitTransactionTestCase) {
 		tc.SetupMocks(mocks, ctx)
 	}
 
-	setCommonSubmitTransactionMocks(mocks, ctx)
+	setCommonSubmitTransactionMocks(mocks)
 
 	receiver := createToAddress()
 	gasLimit := uint64(1000)
@@ -125,7 +128,7 @@ func runSubmitTransactionTest(t *testing.T, tc SubmitTransactionTestCase) {
 	}
 }
 
-func setCommonSubmitTransactionMocks(m *Mocks, ctx any) {
+func setCommonSubmitTransactionMocks(m *Mocks) {
 	fromAddress := createFromAddress()
 	m.Workflow.EXPECT().FromAddress().Return(&fromAddress)
 	m.EVM.EXPECT().ConfirmationTimeout().Return(2 * time.Second)
@@ -219,10 +222,10 @@ func TestEVMService(t *testing.T) {
 						txRequest.ToAddress == expectedTxRequest.ToAddress &&
 						slices.Equal(txRequest.EncodedPayload, expectedTxRequest.EncodedPayload)
 				})).Return(expectedTx, nil)
-				m.TxManager.EXPECT().GetTransactionStatus(ctx, mock.Anything).Return(commontypes.Unconfirmed, nil)
+				m.TxManager.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Unconfirmed, nil)
 				txHash := common.HexToHash(ExpectedTxHash)
 				mockReceipt := NewChainReceipt(txHash, t)
-				m.TxManager.EXPECT().GetTransactionReceipt(ctx, mock.Anything).Return(&mockReceipt, nil)
+				m.TxManager.EXPECT().GetTransactionReceipt(mock.Anything, mock.Anything).Return(&mockReceipt, nil)
 			},
 			ExpectedResult: &evm.TransactionResult{
 				TxHash:   common.HexToHash(ExpectedTxHash),
@@ -234,11 +237,11 @@ func TestEVMService(t *testing.T) {
 			SetupMocks: func(m *Mocks, ctx any) {
 				expectedTx := txmgr.Tx{}
 				m.TxManager.EXPECT().CreateTransaction(ctx, mock.Anything).Return(expectedTx, nil)
-				m.TxManager.EXPECT().GetTransactionStatus(ctx, mock.Anything).Return(commontypes.Unconfirmed, nil)
+				m.TxManager.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Unconfirmed, nil)
 				expectedMessage := "fail creating transaction"
-				m.TxManager.EXPECT().GetTransactionReceipt(ctx, mock.Anything).Return(nil, errors.New(expectedMessage))
+				m.TxManager.EXPECT().GetTransactionReceipt(mock.Anything, mock.Anything).Return(nil, errors.New(expectedMessage))
 			},
-			ExpectedError: "failed to get TX receipt for tx with ID",
+			ExpectedError: "getting transaction receipt",
 		},
 		{
 			Name: "Fails getting transaction status",
@@ -246,14 +249,14 @@ func TestEVMService(t *testing.T) {
 				expectedTx := txmgr.Tx{}
 				m.TxManager.EXPECT().CreateTransaction(ctx, mock.Anything).Return(expectedTx, nil)
 				expectedMessage := "fail getting transaction status"
-				m.TxManager.EXPECT().GetTransactionStatus(ctx, mock.Anything).Return(commontypes.Fatal, errors.New(expectedMessage))
+				m.TxManager.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Fatal, errors.New(expectedMessage))
 			},
-			ExpectedError: "fail getting transaction status",
+			ExpectedError: "failed getting transaction status",
 		},
 		{
 			Name: "Success with pending status and then finalized status",
 			SetupMocks: func(m *Mocks, ctx any) {
-				runSubmitTxGettingDifferentStatusAndReceipts(t, m, ctx, returnedStatusAndReceipts{
+				runSubmitTxGettingDifferentStatusAndReceipts(m, ctx, returnedStatusAndReceipts{
 					Status:   []commontypes.TransactionStatus{commontypes.Pending, commontypes.Finalized},
 					Receipts: []receiptResult{{Receipt: createMockReceipt(t), Error: nil}}})
 			},
@@ -265,7 +268,7 @@ func TestEVMService(t *testing.T) {
 		{
 			Name: "Success with unknown status and then finalized status",
 			SetupMocks: func(m *Mocks, ctx any) {
-				runSubmitTxGettingDifferentStatusAndReceipts(t, m, ctx, returnedStatusAndReceipts{
+				runSubmitTxGettingDifferentStatusAndReceipts(m, ctx, returnedStatusAndReceipts{
 					Status:   []commontypes.TransactionStatus{commontypes.Unknown, commontypes.Finalized},
 					Receipts: []receiptResult{{Receipt: createMockReceipt(t), Error: nil}}})
 			},
@@ -277,7 +280,7 @@ func TestEVMService(t *testing.T) {
 		{
 			Name: "Success with unknown status and then unconfirmed status",
 			SetupMocks: func(m *Mocks, ctx any) {
-				runSubmitTxGettingDifferentStatusAndReceipts(t, m, ctx, returnedStatusAndReceipts{
+				runSubmitTxGettingDifferentStatusAndReceipts(m, ctx, returnedStatusAndReceipts{
 					Status:   []commontypes.TransactionStatus{commontypes.Unknown, commontypes.Unconfirmed},
 					Receipts: []receiptResult{{Receipt: createMockReceipt(t), Error: nil}}})
 			},
@@ -289,7 +292,7 @@ func TestEVMService(t *testing.T) {
 		{
 			Name: "Success with unknown status and then unconfirmed status and failed get receipt attempt with null receipt",
 			SetupMocks: func(m *Mocks, ctx any) {
-				runSubmitTxGettingDifferentStatusAndReceipts(t, m, ctx, returnedStatusAndReceipts{
+				runSubmitTxGettingDifferentStatusAndReceipts(m, ctx, returnedStatusAndReceipts{
 					Status:   []commontypes.TransactionStatus{commontypes.Unknown, commontypes.Unconfirmed},
 					Receipts: []receiptResult{{Receipt: nil, Error: nil}, {Receipt: createMockReceipt(t), Error: nil}}})
 			},
@@ -301,7 +304,7 @@ func TestEVMService(t *testing.T) {
 		{
 			Name: "Success with unknown status and then finalized status and failed get receipt attempt with error",
 			SetupMocks: func(m *Mocks, ctx any) {
-				runSubmitTxGettingDifferentStatusAndReceipts(t, m, ctx, returnedStatusAndReceipts{
+				runSubmitTxGettingDifferentStatusAndReceipts(m, ctx, returnedStatusAndReceipts{
 					Status:   []commontypes.TransactionStatus{commontypes.Unknown, commontypes.Finalized},
 					Receipts: []receiptResult{{Receipt: nil, Error: errors.New("Some error")}, {Receipt: createMockReceipt(t), Error: nil}}})
 			},
@@ -315,8 +318,8 @@ func TestEVMService(t *testing.T) {
 			SetupMocks: func(m *Mocks, ctx any) {
 				expectedTx := txmgr.Tx{}
 				m.TxManager.EXPECT().CreateTransaction(ctx, mock.Anything).Return(expectedTx, nil)
-				m.TxManager.EXPECT().GetTransactionStatus(ctx, mock.Anything).Return(commontypes.Pending, nil).Once()
-				m.TxManager.EXPECT().GetTransactionStatus(ctx, mock.Anything).Return(commontypes.Fatal, nil).Once()
+				m.TxManager.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Pending, nil).Once()
+				m.TxManager.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(commontypes.Fatal, nil).Once()
 			},
 			ExpectedResult: &evm.TransactionResult{
 				TxHash:   common.Hash{},
@@ -332,14 +335,14 @@ func TestEVMService(t *testing.T) {
 	}
 }
 
-func runSubmitTxGettingDifferentStatusAndReceipts(t *testing.T, m *Mocks, ctx any, expectedReturns returnedStatusAndReceipts) {
+func runSubmitTxGettingDifferentStatusAndReceipts(m *Mocks, ctx any, expectedReturns returnedStatusAndReceipts) {
 	expectedTx := txmgr.Tx{}
 	m.TxManager.EXPECT().CreateTransaction(ctx, mock.Anything).Return(expectedTx, nil)
 	for _, status := range expectedReturns.Status {
-		m.TxManager.EXPECT().GetTransactionStatus(ctx, mock.Anything).Return(status, nil).Once()
+		m.TxManager.EXPECT().GetTransactionStatus(mock.Anything, mock.Anything).Return(status, nil).Once()
 	}
 	for _, receiptResult := range expectedReturns.Receipts {
-		m.TxManager.EXPECT().GetTransactionReceipt(ctx, mock.Anything).Return(receiptResult.Receipt, receiptResult.Error).Once()
+		m.TxManager.EXPECT().GetTransactionReceipt(mock.Anything, mock.Anything).Return(receiptResult.Receipt, receiptResult.Error).Once()
 	}
 }
 
