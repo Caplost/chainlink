@@ -1193,6 +1193,7 @@ func AddLane(
 }
 
 func AddSolanaSrcChangesets(e *DeployedEnv, solChainSelector, remoteChainSelector uint64, remoteFamily string) []commoncs.ConfiguredChangeSet {
+	//nolint:staticcheck //SA4006 ignoring
 	chainFamilySelector := [4]uint8{}
 	switch remoteFamily {
 	case chainsel.FamilyEVM:
