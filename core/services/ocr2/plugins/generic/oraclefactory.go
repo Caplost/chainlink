@@ -76,7 +76,9 @@ func (of *oracleFactory) NewOracle(ctx context.Context, args core.OracleArgs) (c
 	if !of.peerWrapper.IsStarted() {
 		return nil, errors.New("peer wrapper not started")
 	}
+	of.lggr.Debugf("Getting relayer with RelayID: Network=%s, ChainID=%s", "evm", of.config.ChainID)
 
+	//TODO lautaro the following line fails due to "of.config.ChainID=nil", making the relayerSet.Get call fail, should it be present?
 	relayerSetRelayer, err := of.relayerSet.Get(ctx, types.RelayID{Network: "evm", ChainID: of.config.ChainID})
 	if err != nil {
 		return nil, fmt.Errorf("error when getting relayer: %w", err)

@@ -114,6 +114,7 @@ func (s *StandardCapabilities) Start(ctx context.Context) error {
 
 			if err = s.capabilitiesLoop.Service.Initialise(cctx, s.spec.Config, s.telemetryService, s.store, s.CapabilitiesRegistry, s.errorLog,
 				s.pipelineRunner, s.relayerSet, s.oracleFactory, s.gatewayConnector, s.keystore); err != nil {
+				fmt.Printf("error s.oracleFactory: %#v\n", s.oracleFactory)
 				s.log.Errorf("error initialising standard capabilities service: %v", err)
 				return
 			}

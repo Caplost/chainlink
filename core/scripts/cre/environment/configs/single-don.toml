@@ -16,10 +16,10 @@
   csa_encryption_key = "d1093c0060d50a3c89c189b2e485da5a3ce57f3dcb38ab7e2c0d5f0bb2314a44" # any random 32 byte hex string
   image = "job-distributor:0.12.7"
 
-[s3provider]
-  # use all defaults
-  port = 9000
-  console_port = 9001
+#[s3provider]
+#  # use all defaults
+#  port = 9000
+#  console_port = 9001
 
 [infra]
   # either "docker" or "crib"
@@ -34,6 +34,10 @@
 # uncomment as needed and adjust paths to enable these capabilities and have them copied to containers/pods
 # these default paths assume that binaries are placed in core/scripts/cre/environment/ folder
 # cron_capability_binary_path = "./cron"
+cron_capability_binary_path = "/Users/lautarofernandez/Desktop/cronBinary/cron"
+#evm_capability_binary_path = "/Users/lautarofernandez/Desktop/cronBinary/evm"
+evm_capability_binary_path = "/Users/lautarofernandez/repos/capabilities/chain_capabilities/evm/evm"
+
 # log_event_trigger_binary_path = "./logtrigger"
 # read_contract_capability_binary_path = "./readcontract"
 

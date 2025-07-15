@@ -50,6 +50,8 @@ require (
 	github.com/smartcontractkit/chainlink-testing-framework/lib v1.54.4
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.2
 	github.com/smartcontractkit/chainlink/system-tests/lib v0.0.0-00010101000000-000000000000
+	github.com/smartcontractkit/cre-sdk-go v0.0.0-20250709203740-9197d929abcd
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v0.1.0
 	github.com/smartcontractkit/libocr v0.0.0-20250604151357-2fe8c61bbf2e
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.19.0
