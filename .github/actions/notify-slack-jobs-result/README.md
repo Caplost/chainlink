@@ -23,7 +23,7 @@ inputs:
     description: "The workflow run ID to get the results from (usually ${{ github.run_id }})"
     required: true
   github_job_name_regex:
-    description: "The regex to use to match 1..many job name(s) to collect results from. Should include a capture group named 'cap' for the part of the job name you want to display in the Slack message (e.g. ^Client Compatability Test (?<cap>.*?)$)"
+    description: "The regex to use to match 1..many job name(s) to collect results from. Should include a capture group named 'cap' for the part of the job name you want to display in the Slack message (e.g. ^Client Compatibility Test (?<cap>.*?)$)"
     required: true
   message_title:
     description: "The title of the Slack message"
