@@ -10,10 +10,10 @@ import (
 
 func TestSpecArgs_OCRKeyBundleIDs_Validation(t *testing.T) {
 	tests := []struct {
-		name           string
+		name            string
 		ocrKeyBundleIDs map[string]string
-		wantErr        bool
-		errorContains  string
+		wantErr         bool
+		errorContains   string
 	}{
 		{
 			name: "valid OCR key bundle IDs",
@@ -38,7 +38,7 @@ func TestSpecArgs_OCRKeyBundleIDs_Validation(t *testing.T) {
 			ocrKeyBundleIDs: map[string]string{
 				"": "test-key-bundle-id",
 			},
-			wantErr: true, // Empty key causes TOML syntax error
+			wantErr:       true, // Empty key causes TOML syntax error
 			errorContains: "toml error",
 		},
 		{
@@ -51,9 +51,9 @@ func TestSpecArgs_OCRKeyBundleIDs_Validation(t *testing.T) {
 		{
 			name: "special characters in OCR key bundle IDs",
 			ocrKeyBundleIDs: map[string]string{
-				"evm-mainnet":     "key-bundle-123-abc",
+				"evm-mainnet":    "key-bundle-123-abc",
 				"polygon_mumbai": "key_bundle_456_def",
-				"arbitrum.one":    "key.bundle.789.ghi",
+				"arbitrum.one":   "key.bundle.789.ghi",
 			},
 			wantErr: false,
 		},
@@ -93,7 +93,7 @@ func TestSpecArgs_OCRKeyBundleIDs_Validation(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotEmpty(t, tomlString)
-				
+
 				// Validate that the generated TOML can be parsed back
 				_, err = validate.ValidatedCCIPSpec(tomlString)
 				require.NoError(t, err)
@@ -104,9 +104,9 @@ func TestSpecArgs_OCRKeyBundleIDs_Validation(t *testing.T) {
 
 func TestSpecArgs_RelayConfigs_Validation(t *testing.T) {
 	tests := []struct {
-		name         string
-		relayConfigs map[string]any
-		wantErr      bool
+		name          string
+		relayConfigs  map[string]any
+		wantErr       bool
 		errorContains string
 	}{
 		{
@@ -156,12 +156,12 @@ func TestSpecArgs_RelayConfigs_Validation(t *testing.T) {
 			name: "relay configs with various data types",
 			relayConfigs: map[string]any{
 				"evm": map[string]any{
-					"stringValue":  "test",
-					"intValue":     123,
-					"floatValue":   123.456,
-					"boolValue":    true,
-					"arrayValue":   []string{"a", "b", "c"},
-					"mapValue":     map[string]string{"key": "value"},
+					"stringValue": "test",
+					"intValue":    123,
+					"floatValue":  123.456,
+					"boolValue":   true,
+					"arrayValue":  []string{"a", "b", "c"},
+					"mapValue":    map[string]string{"key": "value"},
 				},
 			},
 			wantErr: false,
@@ -203,7 +203,7 @@ func TestSpecArgs_RelayConfigs_Validation(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotEmpty(t, tomlString)
-				
+
 				// Validate that the generated TOML can be parsed back
 				_, err = validate.ValidatedCCIPSpec(tomlString)
 				require.NoError(t, err)
@@ -294,7 +294,7 @@ func TestSpecArgs_PluginConfig_Validation(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotEmpty(t, tomlString)
-				
+
 				// Validate that the generated TOML can be parsed back
 				_, err = validate.ValidatedCCIPSpec(tomlString)
 				require.NoError(t, err)
@@ -305,10 +305,10 @@ func TestSpecArgs_PluginConfig_Validation(t *testing.T) {
 
 func TestSpecArgs_P2PV2Bootstrappers_InvalidFormats(t *testing.T) {
 	tests := []struct {
-		name           string
-		bootstrappers  []string
-		wantErr        bool
-		errorContains  string
+		name          string
+		bootstrappers []string
+		wantErr       bool
+		errorContains string
 	}{
 		{
 			name: "valid bootstrapper format",
@@ -424,7 +424,7 @@ func TestSpecArgs_P2PV2Bootstrappers_InvalidFormats(t *testing.T) {
 
 			tomlString, err := validate.NewCCIPSpecToml(specArgs)
 			require.NoError(t, err) // TOML generation should always succeed
-			
+
 			// The validation happens in ValidatedCCIPSpec
 			_, err = validate.ValidatedCCIPSpec(tomlString)
 			if tt.wantErr {
@@ -515,7 +515,7 @@ func TestSpecArgs_RequiredFields_EdgeCases(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tomlString, err := validate.NewCCIPSpecToml(tt.specArgs)
 			require.NoError(t, err) // TOML generation should always succeed
-			
+
 			// The validation happens in ValidatedCCIPSpec
 			_, err = validate.ValidatedCCIPSpec(tomlString)
 			if tt.wantErr {
